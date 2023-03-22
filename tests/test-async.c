@@ -49,7 +49,8 @@ static void test_parallel_triple_scan(
     int expected_scan_complete_loops_2,
     char* text_0,
     char* text_1,
-    char* text_2)
+    char* text_2,
+    bool  use_copies)
 {
   YR_DEBUG_FPRINTF(
       1,
@@ -96,10 +97,14 @@ static void test_parallel_triple_scan(
     scan_not_complete[i] = 1;
     scan_complete_loops[i] = 0;
 
-    assert_true_expr(ERROR_SUCCESS == yr_scanner_create(rules, &scanner[i]));
+    if(!use_copies || 0 == i){
+      assert_true_expr(ERROR_SUCCESS == yr_scanner_create(rules, &scanner[i]));
 
-    yr_scanner_set_flags(scanner[i], SCAN_FLAGS_NO_TRYCATCH);
+      yr_scanner_set_flags(scanner[i], SCAN_FLAGS_NO_TRYCATCH);
 
+    }else{
+      assert_true_expr(ERROR_SUCCESS == yr_scanner_copy(scanner[0],&scanner[i]));
+    }
     yr_scanner_set_callback(
         scanner[i], _scan_callback, (void*) &callback_ctx[i]);
 
@@ -250,6 +255,8 @@ static void test_parallel_strings()
   int expected_scan_complete_loops_4 = 4;
   int expected_scan_complete_loops_5 = 5;
 
+  //bool  use_copies
+  for(bool a = false, use_copies = true; use_copies; a = !a, use_copies = a){
   test_parallel_triple_scan(
       rules,
       expected_scan_complete_loops_1,
@@ -257,7 +264,8 @@ static void test_parallel_strings()
       expected_scan_complete_loops_1,
       X0_TEXT_1024_BYTES__ABC_XYZ__X0_TEXT_1024_BYTES,
       X0_TEXT_1024_BYTES__ABC_XYZ__X0_TEXT_1024_BYTES,
-      X0_TEXT_1024_BYTES__ABC_XYZ__X0_TEXT_1024_BYTES);
+      X0_TEXT_1024_BYTES__ABC_XYZ__X0_TEXT_1024_BYTES,
+      use_copies);
 
   test_parallel_triple_scan(
       rules,
@@ -266,7 +274,8 @@ static void test_parallel_strings()
       expected_scan_complete_loops_2,
       X0_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
       X0_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
-      X0_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES);
+      X0_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
+      use_copies);
 
   test_parallel_triple_scan(
       rules,
@@ -275,7 +284,8 @@ static void test_parallel_strings()
       expected_scan_complete_loops_2,
       X1_TEXT_1024_BYTES__ABC_XYZ__X0_TEXT_1024_BYTES,
       X1_TEXT_1024_BYTES__ABC_XYZ__X0_TEXT_1024_BYTES,
-      X1_TEXT_1024_BYTES__ABC_XYZ__X0_TEXT_1024_BYTES);
+      X1_TEXT_1024_BYTES__ABC_XYZ__X0_TEXT_1024_BYTES,
+      use_copies);
 
   test_parallel_triple_scan(
       rules,
@@ -284,7 +294,8 @@ static void test_parallel_strings()
       expected_scan_complete_loops_3,
       X1_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
       X1_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
-      X1_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES);
+      X1_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
+      use_copies);
 
   test_parallel_triple_scan(
       rules,
@@ -293,7 +304,8 @@ static void test_parallel_strings()
       expected_scan_complete_loops_5,
       X1_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
       X2_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
-      X3_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES);
+      X3_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
+      use_copies);
 
   test_parallel_triple_scan(
       rules,
@@ -302,8 +314,9 @@ static void test_parallel_strings()
       expected_scan_complete_loops_3,
       X3_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
       X2_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
-      X1_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES);
-
+      X1_TEXT_1024_BYTES__ABC_XYZ__X1_TEXT_1024_BYTES,
+      use_copies);
+  }
   yr_rules_destroy(rules);
 
   YR_DEBUG_FPRINTF(1, stderr, "} // %s()\n", __FUNCTION__);

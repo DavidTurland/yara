@@ -201,8 +201,26 @@ static void _yr_scanner_clean_matches(YR_SCANNER* scanner)
       0,
       sizeof(YR_MATCHES) * scanner->rules->num_strings);
 }
+// forward
+YR_API int _yr_scanner_create_or_copy(
+    YR_RULES* rules,
+    YR_SCANNER** scanner,
+    YR_SCANNER* scanner_root);
+
+YR_API int yr_scanner_copy(YR_SCANNER* scanner_root,YR_SCANNER** scanner)
+{
+  return _yr_scanner_create_or_copy(NULL, scanner,scanner_root);
+}
 
 YR_API int yr_scanner_create(YR_RULES* rules, YR_SCANNER** scanner)
+{
+  return _yr_scanner_create_or_copy(rules, scanner,NULL);
+}
+
+YR_API int _yr_scanner_create_or_copy(
+    YR_RULES* rules,
+    YR_SCANNER** scanner,
+    YR_SCANNER* scanner_root)
 {
   YR_DEBUG_FPRINTF(2, stderr, "- %s() {} \n", __FUNCTION__);
 
@@ -218,14 +236,22 @@ YR_API int yr_scanner_create(YR_RULES* rules, YR_SCANNER** scanner)
       yr_hash_table_create(64, &new_scanner->objects_table),
       yr_free(new_scanner));
 
+  if(NULL == scanner_root){
   new_scanner->rules = rules;
-  new_scanner->entry_point = YR_UNDEFINED;
-  new_scanner->file_size = YR_UNDEFINED;
   new_scanner->canary = rand();
 
   // By default report both matching and non-matching rules.
   new_scanner->flags = SCAN_FLAGS_REPORT_RULES_MATCHING |
                        SCAN_FLAGS_REPORT_RULES_NOT_MATCHING;
+  }else{
+    rules = scanner_root->rules;
+    new_scanner->rules = rules;
+    new_scanner->canary = scanner_root->canary;
+    new_scanner->flags = scanner_root->flags;
+  }
+
+  new_scanner->entry_point = YR_UNDEFINED;
+  new_scanner->file_size = YR_UNDEFINED;
 
   new_scanner->rule_matches_flags = (YR_BITMASK*) yr_calloc(
       sizeof(YR_BITMASK), YR_BITMASK_SIZE(rules->num_rules));
@@ -265,30 +291,62 @@ YR_API int yr_scanner_create(YR_RULES* rules, YR_SCANNER** scanner)
   new_scanner->profiling_info = NULL;
 #endif
 
-  external = rules->ext_vars_table;
+  if(NULL == scanner_root){
+    external = rules->ext_vars_table;
 
-  while (!EXTERNAL_VARIABLE_IS_NULL(external))
-  {
-    YR_OBJECT* object;
+    while (!EXTERNAL_VARIABLE_IS_NULL(external))
+    {
+      YR_OBJECT* object;
 
-    FAIL_ON_ERROR_WITH_CLEANUP(
-        yr_object_from_external_variable(external, &object),
-        // cleanup
-        yr_scanner_destroy(new_scanner));
+      FAIL_ON_ERROR_WITH_CLEANUP(
+          yr_object_from_external_variable(external, &object),
+          // cleanup
+          yr_scanner_destroy(new_scanner));
 
-    FAIL_ON_ERROR_WITH_CLEANUP(yr_hash_table_add(
-                                   new_scanner->objects_table,
-                                   external->identifier,
-                                   NULL,
-                                   (void*) object),
-                               // cleanup
-                               yr_object_destroy(object);
-                               yr_scanner_destroy(new_scanner));
+      FAIL_ON_ERROR_WITH_CLEANUP(yr_hash_table_add(
+                                    new_scanner->objects_table,
+                                    external->identifier,
+                                    NULL,
+                                    (void*) object),
+                                // cleanup
+                                yr_object_destroy(object);
+                                yr_scanner_destroy(new_scanner));
 
-    yr_object_set_canary(object, new_scanner->canary);
-    external++;
+      yr_object_set_canary(object, new_scanner->canary);
+      external++;
+    }
+  }else{
+    YR_HASH_TABLE* table = scanner_root->objects_table;
+    YR_HASH_TABLE_ENTRY* entry;
+
+    if (table == NULL){
+      *scanner = new_scanner;
+      return ERROR_SUCCESS;
+    }
+
+    for (int i = 0; i < table->size; i++)
+    {
+      entry = table->buckets[i];
+      while (entry != NULL)
+      {
+        YR_OBJECT* object;
+        FAIL_ON_ERROR_WITH_CLEANUP(
+          yr_object_copy(entry->value, &object),
+          // cleanup
+          yr_scanner_destroy(new_scanner));
+        FAIL_ON_ERROR_WITH_CLEANUP(yr_hash_table_add(
+                                      new_scanner->objects_table,
+                                      object->identifier,
+                                      NULL,
+                                      (void*) object),
+                                  // cleanup
+                                  yr_object_destroy(object);
+                                  yr_scanner_destroy(new_scanner));
+        yr_object_set_canary(object, new_scanner->canary);
+        entry = entry->next;
+      }
+    }
   }
-
   *scanner = new_scanner;
 
   return ERROR_SUCCESS;

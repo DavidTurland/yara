@@ -38,6 +38,8 @@ typedef YR_SCAN_CONTEXT YR_SCANNER;
 
 YR_API int yr_scanner_create(YR_RULES* rules, YR_SCANNER** scanner);
 
+YR_API int yr_scanner_copy(YR_SCANNER* scanner_orig,YR_SCANNER** scanner);
+
 YR_API void yr_scanner_destroy(YR_SCANNER* scanner);
 
 YR_API void yr_scanner_set_callback(
