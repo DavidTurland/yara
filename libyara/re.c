@@ -214,9 +214,9 @@ void yr_re_ast_destroy(RE_AST* re_ast)
 // Parses a regexp but don't emit its code. A further call to
 // yr_re_ast_emit_code is required to get the code.
 //
-int yr_re_parse(const char* re_string, RE_AST** re_ast, RE_ERROR* error)
+int yr_re_parse(const char* re_string, RE_AST** re_ast, RE_ERROR* error, int flags)
 {
-  return yr_parse_re_string(re_string, re_ast, error);
+  return yr_parse_re_string(re_string, re_ast, error, flags);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -235,14 +235,18 @@ int yr_re_parse_hex(const char* hex_string, RE_AST** re_ast, RE_ERROR* error)
 int yr_re_compile(
     const char* re_string,
     int flags,
+    int parser_flags,
     YR_ARENA* arena,
     YR_ARENA_REF* ref,
     RE_ERROR* error)
 {
   RE_AST* re_ast;
   RE _re;
+  int result;
 
-  FAIL_ON_ERROR(yr_re_parse(re_string, &re_ast, error));
+  result = yr_re_parse(re_string, &re_ast, error, parser_flags);
+  if (result != ERROR_UNKNOWN_ESCAPE_SEQUENCE)
+    FAIL_ON_ERROR(result);
 
   _re.flags = flags;
 
@@ -255,7 +259,7 @@ int yr_re_compile(
 
   yr_re_ast_destroy(re_ast);
 
-  return ERROR_SUCCESS;
+  return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2291,10 +2295,11 @@ int yr_re_fast_exec(
         break;
 
       case RE_OPCODE_REPEAT_ANY_UNGREEDY:
-        if (bytes_matched >= max_bytes_matched)
+        repeat_any_args = (RE_REPEAT_ANY_ARGS*) (ip + 1);
+
+        if (bytes_matched + repeat_any_args->min >= max_bytes_matched)
           break;
 
-        repeat_any_args = (RE_REPEAT_ANY_ARGS*) (ip + 1);
         match = true;
 
         const uint8_t* next_opcode = ip + 1 + sizeof(RE_REPEAT_ANY_ARGS);

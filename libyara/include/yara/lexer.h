@@ -67,7 +67,11 @@ union YYSTYPE;
   int yylex(    \
       union YYSTYPE* yylval_param, yyscan_t yyscanner, YR_COMPILER* compiler)
 
-
+// The default behavior when a fatal error occurs in the parser is calling
+// exit(YY_EXIT_FAILURE) for terminating the process. This is not acceptable
+// for a library, which should return gracefully to the calling program. For
+// this reason we redefine the YY_FATAL_ERROR macro so that it expands to our
+// own function instead of the one provided by default.
 #define YY_FATAL_ERROR(msg) yara_yyfatal(yyscanner, msg)
 
 
@@ -95,6 +99,8 @@ void yywarning(yyscan_t yyscanner, const char* message_fmt, ...)
 void yyfatal(yyscan_t yyscanner, const char* error_message);
 
 YY_EXTRA_TYPE yyget_extra(yyscan_t yyscanner);
+
+int yr_lex_parse_rules_bytes(const void* rules_data, size_t rules_size, YR_COMPILER* compiler);
 
 int yr_lex_parse_rules_string(const char* rules_string, YR_COMPILER* compiler);
 

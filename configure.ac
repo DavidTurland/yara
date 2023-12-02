@@ -1,4 +1,4 @@
-AC_INIT([yara], [4.3.0], [vmalvarez@virustotal.com])
+AC_INIT([yara], [4.4.0], [vmalvarez@virustotal.com])
 
 AM_SILENT_RULES([yes])
 AC_CONFIG_SRCDIR([cli/yara.c])
@@ -63,7 +63,7 @@ AC_ARG_ENABLE([proc-scan],
              posix=true
              proc_interface=mach
              jemalloc_prefix=je_ ;;
-    mingw*|cygwin*) CFLAGS="$CFLAGS -DUSE_WINDOWS_PROC"
+    mingw*|msys*|cygwin*) CFLAGS="$CFLAGS -DUSE_WINDOWS_PROC"
             proc_interface=windows
             jemalloc_prefix= ;;
     linux*|netbsd*|dragonfly*|kfreebsd*)

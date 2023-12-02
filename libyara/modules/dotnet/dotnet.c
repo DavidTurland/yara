@@ -274,7 +274,7 @@ static const char* get_typedef_type(uint32_t flags)
 static char* create_full_name(const char* name, const char* namespace)
 {
   if (!name || !strlen(name))
-    return namespace ? strdup(namespace) : NULL;
+    return namespace ? yr_strdup(namespace) : NULL;
 
   // No namespace -> return name only
   if (!namespace || !strlen(namespace))
@@ -1179,7 +1179,7 @@ static bool parse_method_params(
   // Array to hold all the possible parameters
   PARAMETERS* params = yr_calloc(param_count, sizeof(PARAMETERS));
 
-  if (!params)
+  if (params == NULL && param_count > 0)
     return false;
 
   for (uint32_t idx = 0; idx < param_count; ++idx)
