@@ -105,14 +105,16 @@ define_function(magic_mime_type)
     if (block == NULL)
       return_string(YR_UNDEFINED);
 
-    block_data = block->fetch_data(block);
+    block_data = yr_fetch_block_data(block);
 
     if (block_data != NULL)
     {
       magic_setflags(cache->magic_cookie, MAGIC_MIME_TYPE);
 
-      cache->cached_mime_type = yr_strdup(
-          magic_buffer(cache->magic_cookie, block_data, block->size));
+      const char* type = magic_buffer(
+          cache->magic_cookie, block_data, block->size);
+
+      cache->cached_mime_type = (type == NULL) ? NULL : yr_strdup(type);
     }
   }
 
@@ -142,14 +144,16 @@ define_function(magic_type)
     if (block == NULL)
       return_string(YR_UNDEFINED);
 
-    block_data = block->fetch_data(block);
+    block_data = yr_fetch_block_data(block);
 
     if (block_data != NULL)
     {
       magic_setflags(cache->magic_cookie, 0);
 
-      cache->cached_type = yr_strdup(
-          magic_buffer(cache->magic_cookie, block_data, block->size));
+      const char* type = magic_buffer(
+          cache->magic_cookie, block_data, block->size);
+
+      cache->cached_type = (type == NULL) ? NULL : yr_strdup(type);
     }
   }
 
