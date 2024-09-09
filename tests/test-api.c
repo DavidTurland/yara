@@ -1257,6 +1257,277 @@ void test_runtime_warnings()
   yr_rules_destroy(rules);
   yr_finalize();
 }
+//
+void test_scanner_copy()
+{
+  const char* buf = "dummy";
+  const char* rules_str = "\
+    rule true_rule { \
+       condition: true \
+    } \
+    rule false_rule { \
+       condition: false \
+    } \
+    rule test { \
+       condition: bool_var and int_var == 1 and str_var == \"foo\" \
+    }";
+
+  YR_COMPILER* compiler = NULL;
+  YR_RULES* rules = NULL;
+  YR_SCANNER* scanner1 = NULL;
+  YR_SCANNER* scanner2 = NULL;
+
+  int result;
+
+  yr_initialize();
+
+  if (yr_compiler_create(&compiler) != ERROR_SUCCESS)
+  {
+    perror("yr_compiler_create");
+    exit(EXIT_FAILURE);
+  }
+
+  // Define a few variables
+  yr_compiler_define_integer_variable(compiler, "int_var", 0);
+  yr_compiler_define_boolean_variable(compiler, "bool_var", 0);
+  yr_compiler_define_string_variable(compiler, "str_var", "");
+
+  if (yr_compiler_define_string_variable(compiler, "str_var", "") !=
+      ERROR_DUPLICATED_EXTERNAL_VARIABLE)
+  {
+    yr_compiler_destroy(compiler);
+    perror("expecting ERROR_DUPLICATED_EXTERNAL_VARIABLE");
+    exit(EXIT_FAILURE);
+  }
+
+  // Compile a rule that use the variables in the condition.
+  if (yr_compiler_add_string(compiler, rules_str, NULL) != 0)
+  {
+    yr_compiler_destroy(compiler);
+    perror("yr_compiler_add_string");
+    exit(EXIT_FAILURE);
+  }
+
+  if (yr_compiler_get_rules(compiler, &rules) != ERROR_SUCCESS)
+  {
+    yr_compiler_destroy(compiler);
+    perror("yr_compiler_get_rules");
+    exit(EXIT_FAILURE);
+  }
+
+  yr_compiler_destroy(compiler);
+
+  // Create an scanner
+  if (yr_scanner_create(rules, &scanner1) != ERROR_SUCCESS)
+  {
+    yr_rules_destroy(rules);
+    perror("yr_scanner_create");
+    exit(EXIT_FAILURE);
+  }
+
+  // Let's check the yr_scanner_scan_mem returns the appropriate error when
+  // called without specifying a callback.
+  result = yr_scanner_scan_mem(scanner1, (uint8_t*) buf, strlen(buf));
+
+  if (result != ERROR_CALLBACK_REQUIRED)
+  {
+    yr_scanner_destroy(scanner1);
+    yr_rules_destroy(rules);
+    printf(
+        "expecting ERROR_CALLBACK_REQUIRED (%d), got: %d\n",
+        ERROR_CALLBACK_REQUIRED,
+        result);
+    exit(EXIT_FAILURE);
+  }
+
+  struct COUNTERS counters;
+
+  counters.rules_not_matching = 0;
+  counters.rules_matching = 0;
+  counters.rules_warning = 0;
+
+  // Set the callback and the correct variable values for the rule to match.
+  yr_scanner_set_callback(scanner1, count, &counters);
+  yr_scanner_define_integer_variable(scanner1, "int_var", 1);
+  yr_scanner_define_boolean_variable(scanner1, "bool_var", 1);
+  yr_scanner_define_string_variable(scanner1, "str_var", "foo");
+  const int num_its = 1000;
+  const int compiler_its = 1000;
+  {
+    YR_STOPWATCH stopwatch;
+    yr_stopwatch_start(&stopwatch);
+
+    YR_COMPILER* compiler_time = NULL;
+    YR_RULES* rules_time = NULL;
+
+    for (int i = 0 ; i < compiler_its; ++i){
+      if (yr_compiler_create(&compiler_time) != ERROR_SUCCESS)
+      {
+        perror("yr_compiler_create compiler_time" );
+        exit(EXIT_FAILURE);
+      }
+
+      // Define a few variables
+      yr_compiler_define_integer_variable(compiler_time, "int_var", 0);
+      yr_compiler_define_boolean_variable(compiler_time, "bool_var", 0);
+      yr_compiler_define_string_variable(compiler_time, "str_var", "");
+
+      if (yr_compiler_define_string_variable(compiler_time, "str_var", "") !=
+          ERROR_DUPLICATED_EXTERNAL_VARIABLE)
+      {
+        yr_compiler_destroy(compiler_time);
+        perror("expecting ERROR_DUPLICATED_EXTERNAL_VARIABLE");
+        exit(EXIT_FAILURE);
+      }
+
+      // Compile a rule that use the variables in the condition.
+      if (yr_compiler_add_string(compiler_time, rules_str, NULL) != 0)
+      {
+        yr_compiler_destroy(compiler_time);
+        perror("yr_compiler_add_string");
+        exit(EXIT_FAILURE);
+      }
+
+      if (yr_compiler_get_rules(compiler_time, &rules_time) != ERROR_SUCCESS)
+      {
+        yr_compiler_destroy(compiler_time);
+        perror("yr_compiler_get_rules");
+        exit(EXIT_FAILURE);
+      }
+
+      yr_compiler_destroy(compiler_time);
+    }
+    printf("compiler duration was %ld\n", yr_stopwatch_elapsed_ns(&stopwatch)/compiler_its);
+  }
+
+  {
+    YR_STOPWATCH stopwatch;
+    YR_SCANNER* scanner3 = NULL;
+    yr_stopwatch_start(&stopwatch);
+    yr_scanner_create(rules, &scanner3);
+    yr_scanner_define_integer_variable(scanner3, "int_var", 1);
+    yr_scanner_define_boolean_variable(scanner3, "bool_var", 1);
+    yr_scanner_define_string_variable(scanner3, "str_var", "foo");
+    for (int i = 0 ; i < num_its; ++i){
+      yr_scanner_copy(scanner3,&scanner2);
+      yr_scanner_destroy(scanner2);
+    }
+    yr_scanner_destroy(scanner3);
+    printf("clone duration was %ld\n", yr_stopwatch_elapsed_ns(&stopwatch)/num_its);
+  }
+  {
+    YR_STOPWATCH stopwatch;
+    YR_SCANNER* scanner4 = NULL;
+    yr_stopwatch_start(&stopwatch);
+    for (int i = 0 ; i < num_its; ++i){
+      yr_scanner_create(rules, &scanner4);
+      yr_scanner_define_integer_variable(scanner4, "int_var", 1);
+      yr_scanner_define_boolean_variable(scanner4, "bool_var", 1);
+      yr_scanner_define_string_variable(scanner4, "str_var", "foo");
+      yr_scanner_destroy(scanner4);
+    }
+    printf("create duration was %ld\n", yr_stopwatch_elapsed_ns(&stopwatch)/num_its);
+  }
+  {
+    YR_STOPWATCH stopwatch;
+    YR_SCANNER* scanner_scan_time = NULL;
+    yr_scanner_create(rules, &scanner_scan_time);
+    yr_scanner_define_integer_variable(scanner_scan_time, "int_var", 1);
+    yr_scanner_define_boolean_variable(scanner_scan_time, "bool_var", 1);
+    yr_scanner_define_string_variable(scanner_scan_time, "str_var", "foo");
+    struct COUNTERS counters_time;
+    yr_scanner_set_callback(scanner_scan_time, count, &counters_time);
+    yr_stopwatch_start(&stopwatch);
+    for (int i = 0 ; i < num_its; ++i){
+      counters_time.rules_not_matching = 0;
+      counters_time.rules_matching = 0;
+      counters_time.rules_warning = 0;
+      result = yr_scanner_scan_mem(scanner_scan_time, (uint8_t*) buf, strlen(buf));
+    }
+    printf("yr_scanner_scan_mem duration was %ld\n", yr_stopwatch_elapsed_ns(&stopwatch)/num_its);
+    yr_scanner_destroy(scanner_scan_time);    
+  }
+
+
+  if(yr_scanner_copy(scanner1,&scanner2) != ERROR_SUCCESS){
+    yr_scanner_destroy(scanner1);
+    yr_rules_destroy(rules);
+    perror("yr_scanner_clone scanner2");
+    exit(EXIT_FAILURE);
+  }
+
+  {
+    yr_scanner_set_callback(scanner2, count, &counters);
+    result = yr_scanner_scan_mem(scanner1, (uint8_t*) buf, strlen(buf));
+  }
+  if (result != ERROR_SUCCESS)
+  {
+    yr_scanner_destroy(scanner1);
+    yr_scanner_destroy(scanner2);
+    yr_rules_destroy(rules);
+    printf("expecting ERROR_SUCCESS (%d), got: %d\n", ERROR_SUCCESS, result);
+    exit(EXIT_FAILURE);
+  }
+
+  if (counters.rules_matching != 2 || counters.rules_not_matching != 1)
+  {
+    yr_scanner_destroy(scanner1);
+    yr_scanner_destroy(scanner2);
+    yr_rules_destroy(rules);
+    exit(EXIT_FAILURE);
+  }
+
+  counters.rules_matching = 0;
+  counters.rules_not_matching = 0;
+  counters.rules_warning = 0;
+  // changge from default flags to SCAN_FLAGS_REPORT_RULES_MATCHING
+  yr_scanner_set_flags(scanner1, SCAN_FLAGS_REPORT_RULES_MATCHING);
+  yr_scanner_set_callback(scanner1, count, &counters);
+  yr_scanner_scan_mem(scanner1, (uint8_t*) buf, strlen(buf));
+
+  if (counters.rules_matching != 2 || counters.rules_not_matching != 0)
+  {
+    yr_scanner_destroy(scanner1);
+    yr_scanner_destroy(scanner2);
+    yr_rules_destroy(rules);
+    exit(EXIT_FAILURE);
+  }
+
+  //yr_scanner_destroy(scanner1);
+
+  counters.rules_matching = 0;
+  counters.rules_not_matching = 0;
+  counters.rules_warning = 0;
+
+  // default flags are copied from scanner1 on copying
+  yr_scanner_set_callback(scanner2, count, &counters);
+  yr_scanner_scan_mem(scanner2, (uint8_t*) buf, strlen(buf));
+  if (counters.rules_not_matching != 1 || counters.rules_matching != 2)
+  {
+    //yr_scanner_destroy(scanner1);
+    yr_scanner_destroy(scanner2);
+    yr_rules_destroy(rules);
+    exit(EXIT_FAILURE);
+  }
+
+  counters.rules_matching = 0;
+  counters.rules_not_matching = 0;
+  counters.rules_warning = 0;
+  yr_scanner_set_flags(scanner2, SCAN_FLAGS_REPORT_RULES_MATCHING);
+  yr_scanner_set_callback(scanner2, count, &counters);
+  yr_scanner_scan_mem(scanner2, (uint8_t*) buf, strlen(buf));
+  if (counters.rules_not_matching != 0 || counters.rules_matching != 2)
+  {
+    //yr_scanner_destroy(scanner1);
+    yr_scanner_destroy(scanner2);
+    yr_rules_destroy(rules);
+    exit(EXIT_FAILURE);
+  }
+  yr_scanner_destroy(scanner1);
+  yr_scanner_destroy(scanner2);
+  yr_rules_destroy(rules);
+  yr_finalize();
+}
 
 int main(int argc, char** argv)
 {
@@ -1277,6 +1548,7 @@ int main(int argc, char** argv)
   test_include_callback();
   test_save_load_rules();
   test_scanner();
+  test_scanner_copy();
   test_xor_key_string_in_atom();
   test_ast_callback();
   test_rules_stats();

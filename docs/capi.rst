@@ -346,6 +346,40 @@ This is a better solution than having a separate :c:type:`YR_RULES` for each
 worker, as :c:type:`YR_RULES` structures have large memory footprint (specially
 if you have a lot of rules) while scanners are very lightweight.
 
+Create a scanner with :c:func:`yr_scanner_copy` passing in a scanner with required
+external variables if you want
+- multiple scanners with the same set of external variables, eg one scanner per thread
+This avoids having to replay all the ``yr_scanner_define_XXXX_variable`` on the new scanner
+
+.. code-block:: c
+    YR_SCANNER* scanner = NULL;
+    for (int i = 0 ; i < num_its; ++i){
+      if(fabulous(i)){
+        yr_scanner_create(rules_fab, &scanner);
+        yr_scanner_define_integer_variable(scanner, "fab_var", 1);
+      }else{
+        yr_scanner_create(rules_standard, &scanner);
+        yr_scanner_define_integer_variable(scanner, "standard_var", 1);      
+      }
+      // do that match thing
+      yr_scanner_destroy(scanner);
+    }
+
+.. code-block:: c
+    YR_SCANNER* scanner_fab = NULL;
+    YR_SCANNER* scanner_standard = NULL;
+    YR_SCANNER* new_scanner = NULL;
+    yr_scanner_create(rules_fab, &scanner_fab);
+    yr_scanner_define_integer_variable(scanner_fab "fab_var", 1);
+    yr_scanner_create(rules_standard, &scanner_standard);
+    yr_scanner_define_integer_variable(scanner_standard "standard_var", 1);    
+    for (int i = 0 ; i < num_its; ++i){
+      yr_scanner_copy(fabulous(i)? &scanner_fab : &scanner_standard,&new_scanner);
+      // do that match thing
+      yr_scanner_destroy(new_scanner);
+    }
+    yr_scanner_destroy(scanner);
+
 
 API reference
 =============
@@ -830,8 +864,22 @@ Functions
   .. versionadded:: 3.8.0
 
   Creates a new scanner that can be used for scanning data with the provided
-  provided rules. `scanner` must be a pointer to a :c:type:`YR_SCANNER`, the
-  function will set the pointer to the newly allocated scanner. Returns one of
+  provided rules. `scanner` must be a double pointer to a :c:type:`YR_SCANNER`, the
+  function will set the dereferenced pointer to the newly allocated scanner. Returns one of
+  the following error codes:
+
+    :c:macro:`ERROR_INSUFFICIENT_MEMORY`
+
+.. c:function:: int yr_scanner_copy(YR_SCANNER *scanner, YR_SCANNER **new_scanner)
+
+  .. versionadded:: X.X.X
+
+  Creates a new scanner, `new_scanner`, that is a deep copy of `scanner`.
+  `new_scanner` `objects_table` will be a copy of the scanner `objects_table`.
+  `new_scanner` flags will be initialised with the same `flags` as scanner.
+  `scanner` must be a pointer to an existing :c:type:`YR_SCANNER`, 
+  `new_scanner` must be a double pointer to a :c:type:`YR_SCANNER`, the
+  function will set the dereferenced `scanner` to the newly allocated scanner. Returns one of
   the following error codes:
 
     :c:macro:`ERROR_INSUFFICIENT_MEMORY`
